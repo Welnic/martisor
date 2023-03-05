@@ -2,18 +2,41 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as dat from "lil-gui";
 
-const createHeart = (heartShape, extrudeSettings, heartMaterial, isLeft, scale, x, y, z, rX, rY, rZ) => {
+const white = "#ffffff";
+const red = "#ff0000";
+
+const randomNumber = (min, max) => {
+	return Math.floor(Math.random() * (max - min + 1) + min);
+};
+
+const createRedMaterial = () => {
+	const material = new THREE.MeshBasicMaterial({
+		color: "#" + Math.floor(randomNumber(128, 192)).toString(16) + "0000",
+	});
+	return material;
+};
+
+const materials = [...Array(10)].map(() => createRedMaterial());
+
+const createHeart = (heartShape, extrudeSettings, isLeft, scale) => {
 	let geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
-	let mesh = new THREE.Mesh(geometry, heartMaterial);
-	mesh.scale.set(scale, scale, scale);
+	let mesh = new THREE.Mesh(
+		geometry,
+		new THREE.MeshBasicMaterial({
+			color: white,
+		})
+	);
 
 	if (isLeft) {
-		mesh.position.set(x, y, z);
-		mesh.rotation.set(rX, rY, rZ);
+		mesh = new THREE.Mesh(geometry, materials[Math.floor(Math.random() * materials.length)]);
+		mesh.position.set(-1.67, -0.35, 0);
+		mesh.rotation.set(0, 0, Math.PI + Math.PI / 7);
 	} else {
-		mesh.position.set(x, y, z);
-		mesh.rotation.set(rX, rY, rZ);
+		mesh.position.set(0, 0, 0);
+		mesh.rotation.set(0, 0, Math.PI - Math.PI / 8);
 	}
+
+	mesh.scale.set(scale, scale, scale);
 
 	return mesh;
 };
@@ -71,7 +94,7 @@ const createMartisor = (bow, heartLeft, heartRight) => {
 	const heartGroup = new THREE.Group();
 	heartGroup.add(heartLeft);
 	heartGroup.add(heartRight);
-	heartGroup.position.set(1, -1.7, 0);
+	heartGroup.position.set(1, -1.65, -0.02);
 
 	const martisorGroup = new THREE.Group();
 	martisorGroup.add(bow);
@@ -81,16 +104,46 @@ const createMartisor = (bow, heartLeft, heartRight) => {
 	return martisorGroup;
 };
 
+const spawnMartisoare = (martisor, scene, count) => {
+	const martisoare = [];
+
+	for (let i = 0; i < count * 3; i++) {
+		const martisorClone = martisor.clone();
+		let x = (Math.random() - 0.5) * 100;
+		let y = (Math.random() - 0.5) * 100;
+		let z = (Math.random() - 0.5) * 50;
+		martisorClone.position.set(x, y, z);
+		martisorClone.rotation.set(0, (Math.random() * Math.PI) / 6, (Math.random() * Math.PI) / 4);
+		scene.add(martisorClone);
+
+		martisoare.push({
+			shape: martisorClone,
+			x: Math.random(),
+			y: Math.random(),
+			z: Math.random(),
+		});
+	}
+
+	return martisoare;
+};
+
 // Animate
-const tick = (controls, renderer, scene, camera) => {
+const tick = (controls, renderer, scene, camera, martisoare) => {
 	// Update controls
 	controls.update();
+
+	const speed = 0.01;
+	martisoare.forEach((el) => {
+		el.shape.rotation.x += el.x * speed;
+		el.shape.rotation.y += el.y * 1.5 * speed;
+		el.shape.rotation.z += el.z * 2.5 * speed;
+	});
 
 	// Render
 	renderer.render(scene, camera);
 
 	// Call tick again on the next frame
-	window.requestAnimationFrame(() => tick(controls, renderer, scene, camera));
+	window.requestAnimationFrame(() => tick(controls, renderer, scene, camera, martisoare));
 };
 
 const main = () => {
@@ -99,6 +152,13 @@ const main = () => {
 
 	// Scene
 	const scene = new THREE.Scene();
+	scene.background = new THREE.Color("#c6adcd");
+	// gui.add(scene.background, "r").min(0).max(1).step(0.001);
+	gui.addColor(scene, "background");
+	// gui.addFolder("Materials");
+	// materials.forEach((material, index) => {
+	// 	gui.addColor(material, "color").name(`Material ${index}`);
+	// });
 
 	// Canvas
 	const canvas = document.querySelector("canvas.webgl");
@@ -124,38 +184,9 @@ const main = () => {
 		bevelSize: 1,
 		bevelThickness: 1,
 	};
-	const white = "#ffffff";
-	const materialRed = new THREE.MeshBasicMaterial({
-		color: white,
-	});
 
-	const heartRight = createHeart(
-		heartShape,
-		extrudeSettings,
-		materialRed,
-		false,
-		0.01,
-		0,
-		0,
-		0,
-		0,
-		0,
-		Math.PI - Math.PI / 8
-	);
-
-	const heartLeft = createHeart(
-		heartShape,
-		extrudeSettings,
-		materialRed,
-		true,
-		0.01,
-		-1.66,
-		-0.35,
-		0,
-		0,
-		0,
-		Math.PI + Math.PI / 7
-	);
+	const heartRight = createHeart(heartShape, extrudeSettings, false, 0.01);
+	const heartLeft = createHeart(heartShape, extrudeSettings, true, 0.01);
 
 	// Define the control points of the curve that defines the shape of the bow
 	const loopCurve = new THREE.CatmullRomCurve3([
@@ -186,6 +217,8 @@ const main = () => {
 	const martisor = createMartisor(bowGroup, heartRight, heartLeft);
 	scene.add(martisor);
 
+	const martisoare = spawnMartisoare(martisor, scene, 200);
+
 	// Sizes
 	const sizes = {
 		width: window.innerWidth,
@@ -207,7 +240,7 @@ const main = () => {
 	});
 	// Camera
 	const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100);
-	camera.position.z = 3;
+	camera.position.z = 30;
 	scene.add(camera);
 
 	// Controls
@@ -221,7 +254,7 @@ const main = () => {
 	renderer.setSize(sizes.width, sizes.height);
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-	tick(controls, renderer, scene, camera);
+	tick(controls, renderer, scene, camera, martisoare);
 };
 
 main();
